@@ -13,8 +13,18 @@ import Category from "@/components/home/Category";
 import DoctorList from "@/components/home/DoctorList";
 import ActionButtons from "@/components/home/ActionButtons";
 import { AppColors } from "@/constants/colors";
+import { router } from "expo-router";
 
 export default function HomeScreen() {
+  const handleSearch = (text: string) => {
+    if (text.trim()) {
+      router.push({
+        pathname: "/(tabs)/doctors",
+        params: { search: text.trim() },
+      });
+    }
+  };
+
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="dark-content" backgroundColor={AppColors.white} />
@@ -23,7 +33,7 @@ export default function HomeScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Header />
-        <Search />
+        <Search onSubmit={handleSearch} placeholder="Search Doctor ..." />
         <HeadLine />
         <Category />
         <DoctorList />

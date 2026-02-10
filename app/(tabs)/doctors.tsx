@@ -47,18 +47,28 @@ interface Doctor {
 }
 
 export default function DoctorsScreen() {
-  const { speciality } = useLocalSearchParams<{ speciality?: string }>();
+  const { speciality, search: searchParam } = useLocalSearchParams<{
+    speciality?: string;
+    search?: string;
+  }>();
   const [doctors, setDoctors] = useState<Doctor[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeFilter, setActiveFilter] = useState<string>(speciality || "All");
+  const [searchQuery, setSearchQuery] = useState<string>(searchParam || "");
 
-  // Sync with incoming param when navigating from home
+  // Sync with incoming params when navigating from home
   useEffect(() => {
     if (speciality) {
       setActiveFilter(speciality);
     }
   }, [speciality]);
+
+  useEffect(() => {
+    if (searchParam !== undefined) {
+      setSearchQuery(searchParam);
+    }
+  }, [searchParam]);
 
   useEffect(() => {
     fetchDoctors();
@@ -85,11 +95,33 @@ export default function DoctorsScreen() {
   };
 
   const filteredDoctors = useMemo(() => {
-    if (activeFilter === "All") return doctors;
-    return doctors.filter(
-      (d: Doctor) => d.speciality.toLowerCase() === activeFilter.toLowerCase(),
-    );
-  }, [doctors, activeFilter]);
+    let result = doctors;
+
+    // Apply speciality filter
+    if (activeFilter !== "All") {
+      result = result.filter(
+        (d: Doctor) =>
+          d.speciality.toLowerCase() === activeFilter.toLowerCase(),
+      );
+    }
+
+    // Apply search query
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      result = result.filter(
+        (d: Doctor) =>
+          d.name.toLowerCase().includes(q) ||
+          d.speciality.toLowerCase().includes(q) ||
+          d.degree.toLowerCase().includes(q) ||
+          d.experience.toLowerCase().includes(q) ||
+          String(d.fees).includes(q) ||
+          (d.address?.line1 && d.address.line1.toLowerCase().includes(q)) ||
+          (d.address?.line2 && d.address.line2.toLowerCase().includes(q)),
+      );
+    }
+
+    return result;
+  }, [doctors, activeFilter, searchQuery]);
 
   const handleDoctorPress = (doctor: Doctor) => {
     router.push({
@@ -167,7 +199,11 @@ export default function DoctorsScreen() {
       </View>
 
       <View style={styles.searchContainer}>
-        <Search />
+        <Search
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholder="Search by name, speciality, degree..."
+        />
       </View>
 
       {/* Filter Chips */}

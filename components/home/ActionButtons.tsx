@@ -45,18 +45,27 @@ export default function ActionButtons() {
         {ACTION_BUTTONS.map((button) => (
           <TouchableOpacity
             key={button.id}
-            style={[styles.actionButton, { backgroundColor: button.color }]}
+            style={styles.actionButton}
             onPress={() => handleButtonPress(button.route)}
             activeOpacity={0.85}
           >
-            <View style={styles.iconContainer}>
-              <Ionicons name={button.icon as any} size={26} color="#fff" />
+            <View
+              style={[
+                styles.iconContainer,
+                { backgroundColor: button.color + "1F" },
+              ]}
+            >
+              <Ionicons
+                name={button.icon as any}
+                size={26}
+                color={button.color}
+              />
             </View>
             <View style={styles.textContainer}>
               <Text style={styles.buttonTitle}>{button.title}</Text>
               <Text style={styles.buttonSubtitle}>{button.subtitle}</Text>
             </View>
-            <Ionicons name="chevron-forward" size={20} color="#fff" />
+            <Ionicons name="chevron-forward" size={20} color={button.color} />
           </TouchableOpacity>
         ))}
       </View>
@@ -83,6 +92,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: 18,
     borderRadius: 16,
+    backgroundColor: AppColors.white,
+    borderWidth: 1,
+    borderColor: AppColors.primaryLighter,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.12,
@@ -93,7 +105,6 @@ const styles = StyleSheet.create({
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: "rgba(255, 255, 255, 0.2)",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 14,
@@ -104,11 +115,11 @@ const styles = StyleSheet.create({
   buttonTitle: {
     fontSize: 16,
     fontWeight: "600",
-    color: AppColors.white,
+    color: AppColors.black,
     marginBottom: 2,
   },
   buttonSubtitle: {
     fontSize: 13,
-    color: "rgba(255, 255, 255, 0.85)",
+    color: AppColors.gray,
   },
 });

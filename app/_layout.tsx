@@ -10,6 +10,7 @@ import "react-native-reanimated";
 import { Foundation, Ionicons } from "@expo/vector-icons";
 
 import { useColorScheme } from "@/hooks/use-color-scheme";
+import { AuthProvider } from "@/context/AuthContext";
 
 export const unstable_settings = {
   anchor: "(tabs)",
@@ -27,14 +28,16 @@ export default function RootLayout() {
   }
 
   return (
-    <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
-      <Stack
-        screenOptions={{ headerShown: false, animation: "slide_from_right" }}
-      >
-        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-        <Stack.Screen name="details/[id]" options={{ headerShown: false }} />
-      </Stack>
-      <StatusBar style="auto" />
-    </ThemeProvider>
+    <AuthProvider>
+      <ThemeProvider value={colorScheme === "dark" ? DarkTheme : DefaultTheme}>
+        <Stack
+          screenOptions={{ headerShown: false, animation: "slide_from_right" }}
+        >
+          <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+          <Stack.Screen name="details/[id]" options={{ headerShown: false }} />
+        </Stack>
+        <StatusBar style="auto" />
+      </ThemeProvider>
+    </AuthProvider>
   );
 }

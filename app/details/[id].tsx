@@ -11,7 +11,7 @@ import {
 } from "react-native";
 import React, { useEffect, useState } from "react";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@/context/AuthContext";
 import DetailsHeader from "@/components/details/DetailsHeader";
 import { AppColors } from "@/constants/colors";
 import DetailsProfile from "@/components/details/DetailsProfile";
@@ -40,6 +40,7 @@ interface Doctor {
 export default function DoctorDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const { token } = useAuth();
   const [doctor, setDoctor] = useState<Doctor | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -91,7 +92,7 @@ export default function DoctorDetails() {
     if (!doctor.available) {
       Alert.alert(
         "Not Available",
-        "This doctor is currently not available for appointments."
+        "This doctor is currently not available for appointments.",
       );
       return;
     }
@@ -99,26 +100,22 @@ export default function DoctorDetails() {
     if (!selectedDate || !selectedTime) {
       Alert.alert(
         "Select Slot",
-        "Please select both date and time for your appointment."
+        "Please select both date and time for your appointment.",
       );
       return;
     }
 
     try {
       setIsBooking(true);
-      
-      // Get user token from AsyncStorage
-      const token = await AsyncStorage.getItem("userToken");
-      
+
       if (!token) {
-        Alert.alert(
-          "Login Required",
-          "Please login to book an appointment.",
-          [
-            { text: "Cancel", style: "cancel" },
-            { text: "Login", onPress: () => router.push("/login" as any) }
-          ]
-        );
+        Alert.alert("Login Required", "Please login to book an appointment.", [
+          { text: "Cancel", style: "cancel" },
+          {
+            text: "Login",
+            onPress: () => router.push("/(tabs)/profile" as any),
+          },
+        ]);
         return;
       }
 
@@ -147,17 +144,23 @@ export default function DoctorDetails() {
               onPress: () => router.push("/appointments" as any),
             },
             { text: "OK" },
-          ]
+          ],
         );
         // Refresh doctor data to get updated slots
         fetchDoctorDetails();
         setSelectedTime(null);
       } else {
-        Alert.alert("Booking Failed", data.message || "Failed to book appointment. Please try again.");
+        Alert.alert(
+          "Booking Failed",
+          data.message || "Failed to book appointment. Please try again.",
+        );
       }
     } catch (err) {
       console.error("Booking error:", err);
-      Alert.alert("Error", "Network error. Please check your connection and try again.");
+      Alert.alert(
+        "Error",
+        "Network error. Please check your connection and try again.",
+      );
     } finally {
       setIsBooking(false);
     }
@@ -193,7 +196,8 @@ export default function DoctorDetails() {
     return `Book for Rs. ${doctor.fees}`;
   };
 
-  const isButtonDisabled = !doctor?.available || isBooking || !selectedDate || !selectedTime;
+  const isButtonDisabled =
+    !doctor?.available || isBooking || !selectedDate || !selectedTime;
 
   return (
     <View style={styles.container}>

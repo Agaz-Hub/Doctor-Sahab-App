@@ -1,5 +1,7 @@
 import { AppColors } from "@/constants/colors";
+import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
 import React, { useEffect, useState } from "react";
 import {
   ActivityIndicator,
@@ -24,13 +26,15 @@ interface Appointment {
   slotDate: string;
   slotTime: string;
   cancelled: boolean;
-  isCompleted: boolean;
+  iscompleted: boolean;
   payment: boolean;
 }
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 
 export default function AppointmentsScreen() {
+  const { token, user } = useAuth();
+  const router = useRouter();
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -41,76 +45,61 @@ export default function AppointmentsScreen() {
   }, []);
 
   const loadAppointments = async () => {
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     try {
       setLoading(true);
-      // TODO: Replace with actual API call once user auth is in place
-      // const response = await fetch(`${BACKEND_URL}/api/user/appointments`, {
-      //   headers: { token: userToken },
-      // });
-      // const data = await response.json();
-      // if (data.success) setAppointments(data.appointments);
+      const response = await fetch(`${BACKEND_URL}/api/user/appointments`, {
+        headers: { token },
+      });
+      const data = await response.json();
+      if (data.success) {
+        const loaded: Appointment[] = data.appointments;
+        const now = new Date();
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const missedIds: string[] = [];
 
-      // Mock data for now
-      const mockAppointments: Appointment[] = [
-        {
-          _id: "1",
-          docData: {
-            name: "Dr. Sarah Johnson",
-            speciality: "Cardiologist",
-            image: "",
-            fees: 500,
-          },
-          slotDate: getDateString(1),
-          slotTime: "10:00 AM",
-          cancelled: false,
-          isCompleted: false,
-          payment: true,
-        },
-        {
-          _id: "2",
-          docData: {
-            name: "Dr. Michael Chen",
-            speciality: "Neurologist",
-            image: "",
-            fees: 700,
-          },
-          slotDate: getDateString(2),
-          slotTime: "2:30 PM",
-          cancelled: false,
-          isCompleted: false,
-          payment: false,
-        },
-        {
-          _id: "3",
-          docData: {
-            name: "Dr. Emily Davis",
-            speciality: "General Physician",
-            image: "",
-            fees: 300,
-          },
-          slotDate: getDateString(-1),
-          slotTime: "11:00 AM",
-          cancelled: false,
-          isCompleted: true,
-          payment: true,
-        },
-        {
-          _id: "4",
-          docData: {
-            name: "Dr. Rajesh Kumar",
-            speciality: "Dermatologist",
-            image: "",
-            fees: 400,
-          },
-          slotDate: getDateString(-3),
-          slotTime: "4:00 PM",
-          cancelled: true,
-          isCompleted: false,
-          payment: false,
-        },
-      ];
+        // Auto-cancel past scheduled (unpaid/uncompleted) appointments
+        loaded.forEach((apt) => {
+          if (apt.cancelled || apt.iscompleted || apt.payment) return;
+          const [day, month, year] = apt.slotDate.split("_").map(Number);
+          const aptDate = new Date(year, month - 1, day);
+          aptDate.setHours(0, 0, 0, 0);
 
-      setAppointments(mockAppointments);
+          // Cancel if the appointment date is before today (past section)
+          if (aptDate < today) {
+            missedIds.push(apt._id);
+            return;
+          }
+
+          // Also cancel same-day appointments whose time has already passed
+          const [hours, minutes] = apt.slotTime.split(":").map(Number);
+          const aptDateTime = new Date(year, month - 1, day, hours, minutes);
+          if (aptDateTime < now) {
+            missedIds.push(apt._id);
+          }
+        });
+
+        // Mark missed ones as cancelled locally
+        const processed = loaded.map((apt) =>
+          missedIds.includes(apt._id) ? { ...apt, cancelled: true } : apt,
+        );
+        setAppointments(processed);
+
+        // Fire cancel API for missed appointments in background
+        missedIds.forEach((id) => {
+          fetch(`${BACKEND_URL}/api/user/cancel-appointment`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", token: token! },
+            body: JSON.stringify({ appointmentId: id }),
+          }).catch(() => {});
+        });
+      } else {
+        Alert.alert("Error", data.message || "Failed to load appointments");
+      }
     } catch (error) {
       console.error("Error loading appointments:", error);
       Alert.alert("Error", "Failed to load appointments");
@@ -125,26 +114,60 @@ export default function AppointmentsScreen() {
     loadAppointments();
   };
 
+  // Parse slotDate format "day_month_year" (e.g. "11_2_2026") into a Date
+  const parseSlotDate = (slotDate: string): Date => {
+    const parts = slotDate.split("_");
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1; // months are 0-indexed
+    const year = parseInt(parts[2], 10);
+    return new Date(year, month, day);
+  };
+
+  // Parse slotDate + slotTime into a precise Date
+  const parseSlotDateTime = (slotDate: string, slotTime: string): Date => {
+    const parts = slotDate.split("_");
+    const day = parseInt(parts[0], 10);
+    const month = parseInt(parts[1], 10) - 1;
+    const year = parseInt(parts[2], 10);
+    const [hours, minutes] = slotTime.split(":").map(Number);
+    return new Date(year, month, day, hours, minutes);
+  };
+
   const getFilteredAppointments = () => {
-    const today = new Date().toISOString().split("T")[0];
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
 
     if (filter === "upcoming") {
       return appointments.filter(
         (apt: Appointment) =>
-          apt.slotDate >= today && !apt.cancelled && !apt.isCompleted,
+          parseSlotDate(apt.slotDate) >= today &&
+          !apt.cancelled &&
+          !apt.iscompleted,
       );
     } else if (filter === "past") {
-      return appointments.filter(
-        (apt: Appointment) =>
-          apt.slotDate < today || apt.isCompleted || apt.cancelled,
-      );
+      return appointments
+        .filter(
+          (apt: Appointment) =>
+            parseSlotDate(apt.slotDate) < today ||
+            apt.iscompleted ||
+            apt.cancelled,
+        )
+        .sort(
+          (a, b) =>
+            parseSlotDate(b.slotDate).getTime() -
+            parseSlotDate(a.slotDate).getTime(),
+        );
     }
     return appointments;
   };
 
   const getStatus = (apt: Appointment) => {
     if (apt.cancelled) return "cancelled";
-    if (apt.isCompleted) return "completed";
+    if (apt.iscompleted) return "completed";
+    // If date+time has passed and not paid → missed/cancelled
+    const now = new Date();
+    const aptDateTime = parseSlotDateTime(apt.slotDate, apt.slotTime);
+    if (aptDateTime < now && !apt.payment) return "cancelled";
     if (apt.payment) return "confirmed";
     return "scheduled";
   };
@@ -180,13 +203,33 @@ export default function AppointmentsScreen() {
   };
 
   const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
+    const date = parseSlotDate(dateString);
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
       day: "numeric",
       year: "numeric",
     });
+  };
+
+  const handlePayment = (appointment: Appointment) => {
+    Alert.alert(
+      "Pay Now",
+      `Pay ₹${appointment.docData.fees} for your appointment with ${appointment.docData.name}?`,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Pay ₹" + appointment.docData.fees,
+          onPress: () => {
+            // TODO: Integrate real payment gateway (Razorpay/Stripe)
+            Alert.alert(
+              "Payment",
+              "Payment gateway integration coming soon. For now, please pay at the clinic.",
+            );
+          },
+        },
+      ],
+    );
   };
 
   const handleCancel = (appointmentId: string) => {
@@ -198,12 +241,38 @@ export default function AppointmentsScreen() {
         {
           text: "Yes, Cancel",
           style: "destructive",
-          onPress: () => {
-            setAppointments((prev: Appointment[]) =>
-              prev.map((apt: Appointment) =>
-                apt._id === appointmentId ? { ...apt, cancelled: true } : apt,
-              ),
-            );
+          onPress: async () => {
+            if (!token) return;
+            try {
+              const response = await fetch(
+                `${BACKEND_URL}/api/user/cancel-appointment`,
+                {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    token,
+                  },
+                  body: JSON.stringify({ appointmentId }),
+                },
+              );
+              const data = await response.json();
+              if (data.success) {
+                setAppointments((prev: Appointment[]) =>
+                  prev.map((apt: Appointment) =>
+                    apt._id === appointmentId
+                      ? { ...apt, cancelled: true }
+                      : apt,
+                  ),
+                );
+              } else {
+                Alert.alert(
+                  "Error",
+                  data.message || "Failed to cancel appointment",
+                );
+              }
+            } catch (err) {
+              Alert.alert("Error", "Network error. Please try again.");
+            }
           },
         },
       ],
@@ -264,7 +333,7 @@ export default function AppointmentsScreen() {
         </View>
 
         {/* Payment badge */}
-        {!appointment.cancelled && !appointment.isCompleted && (
+        {status !== "cancelled" && status !== "completed" && (
           <View style={styles.paymentRow}>
             <View
               style={[
@@ -300,8 +369,21 @@ export default function AppointmentsScreen() {
         )}
 
         {/* Actions */}
-        {!appointment.cancelled && !appointment.isCompleted && (
+        {status !== "cancelled" && status !== "completed" && (
           <View style={styles.actionButtons}>
+            {!appointment.payment && (
+              <TouchableOpacity
+                style={styles.payButton}
+                onPress={() => handlePayment(appointment)}
+              >
+                <Ionicons
+                  name="card-outline"
+                  size={16}
+                  color={AppColors.white}
+                />
+                <Text style={styles.payText}>Pay Now</Text>
+              </TouchableOpacity>
+            )}
             <TouchableOpacity
               style={styles.cancelButton}
               onPress={() => handleCancel(appointment._id)}
@@ -320,6 +402,28 @@ export default function AppointmentsScreen() {
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color={AppColors.primaryColor} />
         <Text style={styles.loadingText}>Loading appointments...</Text>
+      </View>
+    );
+  }
+
+  if (!token || !user) {
+    return (
+      <View style={styles.loadingContainer}>
+        <Ionicons
+          name="log-in-outline"
+          size={64}
+          color={AppColors.primaryColor}
+        />
+        <Text style={styles.emptyTitle}>Login Required</Text>
+        <Text style={styles.emptySubtitle}>
+          Please sign in to view your appointments
+        </Text>
+        <TouchableOpacity
+          style={styles.loginPromptButton}
+          onPress={() => router.push("/(tabs)/profile")}
+        >
+          <Text style={styles.loginPromptText}>Go to Login</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -540,6 +644,21 @@ const styles = StyleSheet.create({
     gap: 10,
     marginTop: 4,
   },
+  payButton: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: AppColors.primaryColor,
+    gap: 6,
+  },
+  payText: {
+    fontSize: 14,
+    fontWeight: "600",
+    color: AppColors.white,
+  },
   cancelButton: {
     flex: 1,
     flexDirection: "row",
@@ -572,5 +691,17 @@ const styles = StyleSheet.create({
     color: AppColors.gray,
     textAlign: "center",
     marginTop: 6,
+  },
+  loginPromptButton: {
+    marginTop: 20,
+    backgroundColor: AppColors.primaryColor,
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 14,
+  },
+  loginPromptText: {
+    color: AppColors.white,
+    fontWeight: "600",
+    fontSize: 15,
   },
 });
