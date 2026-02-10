@@ -1,4 +1,5 @@
 import {
+  ActivityIndicator,
   Image,
   Pressable,
   StyleSheet,
@@ -6,68 +7,85 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { AppColors } from "@/constants/colors";
 import { Feather } from "@expo/vector-icons";
 import { router } from "expo-router";
 
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
 export interface Doctor {
-  id: number;
+  _id: string;
   name: string;
-  position: string;
-  profilePhoto: string;
+  image: string;
+  speciality: string;
+  degree: string;
+  experience: string;
+  about: string;
+  available: boolean;
+  fees: number;
+  address: {
+    line1?: string;
+    line2?: string;
+  };
 }
 
-const doctors: Doctor[] = [
-  {
-    id: 1,
-    name: "Dr. jane cooper",
-    position: "Pediatrician",
-    profilePhoto:
-      "https://www.shutterstock.com/image-photo/healthcare-medical-staff-concept-portrait-600nw-2281024823.jpg",
-  },
-  {
-    id: 2,
-    name: "Lily Taylor",
-    position: "Ophthalmologist",
-    profilePhoto:
-      "https://www.shutterstock.com/image-photo/profile-photo-attractive-family-doc-600nw-1724693776.jpg",
-  },
-  {
-    id: 3,
-    name: "Max Parker",
-    position: "Endocrinologist",
-    profilePhoto:
-      "https://img.freepik.com/free-photo/woman-doctor-wearing-lab-coat-with-stethoscope-isolated_1303-29791.jpg",
-  },
-  {
-    id: 4,
-    name: "John Doe",
-    position: "Pediatrician",
-    profilePhoto:
-      "https://www.shutterstock.com/image-photo/healthcare-medical-staff-concept-portrait-600nw-2281024823.jpg",
-  },
-  {
-    id: 5,
-    name: "John Doe",
-    position: "Pediatrician",
-    profilePhoto:
-      "https://www.shutterstock.com/image-photo/healthcare-medical-staff-concept-portrait-600nw-2281024823.jpg",
-  },
-];
-
 export default function DoctorList() {
+  const [doctors, setDoctors] = useState<Doctor[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchDoctors();
+  }, []);
+
+  const fetchDoctors = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      const response = await fetch(`${BACKEND_URL}/api/doctor/list`);
+      const data = await response.json();
+
+      if (data.success) {
+        setDoctors(data.doctors.slice(0, 7));
+      } else {
+        setError(data.message || "Failed to fetch doctors");
+      }
+    } catch (err) {
+      setError("Network error. Please try again.");
+      console.error("Error fetching doctors:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
   const handleDoctorPress = (doctor: Doctor) => {
     router.push({
       pathname: "/details/[id]",
       params: {
-        id: doctor.id.toString(),
-        name: doctor.name,
-        position: doctor.position,
-        profilePhoto: doctor.profilePhoto,
+        id: doctor._id,
       },
     });
   };
+
+  if (loading) {
+    return (
+      <View style={styles.centerContainer}>
+        <ActivityIndicator size="large" color={AppColors.primaryColor} />
+        <Text style={styles.loadingText}>Loading doctors...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.centerContainer}>
+        <Text style={styles.errorText}>{error}</Text>
+        <TouchableOpacity style={styles.retryButton} onPress={fetchDoctors}>
+          <Text style={styles.retryText}>Retry</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -76,17 +94,14 @@ export default function DoctorList() {
       {doctors?.map((item) => (
         <Pressable
           onPress={() => handleDoctorPress(item)}
-          key={item.id}
+          key={item._id}
           style={styles.doctorCard}
         >
           <View style={styles.doctorInfo}>
-            <Image
-              source={{ uri: item?.profilePhoto }}
-              style={styles.doctorImage}
-            />
+            <Image source={{ uri: item?.image }} style={styles.doctorImage} />
             <View>
               <Text style={styles.doctorName}>{item?.name}</Text>
-              <Text style={styles.doctorPosition}>{item?.position}</Text>
+              <Text style={styles.doctorPosition}>{item?.speciality}</Text>
             </View>
           </View>
           <View>
@@ -108,6 +123,33 @@ export default function DoctorList() {
 const styles = StyleSheet.create({
   container: {
     marginTop: 25,
+  },
+  centerContainer: {
+    marginTop: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 40,
+  },
+  loadingText: {
+    marginTop: 10,
+    color: AppColors.primaryColor,
+    fontSize: 16,
+  },
+  errorText: {
+    color: "red",
+    fontSize: 16,
+    textAlign: "center",
+    marginBottom: 15,
+  },
+  retryButton: {
+    backgroundColor: AppColors.primaryColor,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 10,
+  },
+  retryText: {
+    color: AppColors.white,
+    fontWeight: "600",
   },
   title: {
     color: AppColors.primaryColor,
@@ -138,6 +180,7 @@ const styles = StyleSheet.create({
     width: 55,
     height: 55,
     borderRadius: 15,
+    backgroundColor: AppColors.primaryLight,
   },
   doctorName: {
     fontWeight: "bold",

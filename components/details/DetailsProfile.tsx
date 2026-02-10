@@ -7,17 +7,23 @@ interface DetailsProfileProps {
   name: string;
   position: string;
   profilePhoto: string;
+  experience?: string;
+  degree?: string;
 }
 
 export default function DetailsProfile({
   name,
   position,
   profilePhoto,
+  experience,
+  degree,
 }: DetailsProfileProps) {
   return (
     <View style={styles.container}>
       <View style={styles.imageContainer}>
-        <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
+        <View style={styles.imageBackground}>
+          <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
+        </View>
         <Text style={styles.rating}>
           4.5 <AntDesign name="star" size={15} color={AppColors.white} />
         </Text>
@@ -25,9 +31,9 @@ export default function DetailsProfile({
       <View>
         <Text style={styles.name}>{name}</Text>
         <Text style={styles.position}>{position}</Text>
-        <Text style={styles.experience}>15 + years of experience</Text>
-        <Text style={styles.patients}>
-          4489+ <Text style={styles.patientsText}> Patients stories</Text>
+        {degree && <Text style={styles.degree}>{degree}</Text>}
+        <Text style={styles.experience}>
+          {experience || "N/A"} of experience
         </Text>
       </View>
     </View>
@@ -48,10 +54,16 @@ const styles = StyleSheet.create({
     alignContent: "center",
     flexDirection: "column",
   },
+  imageBackground: {
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    borderRadius: 25,
+    padding: 8,
+  },
   profileImage: {
     width: 80,
     height: 80,
     borderRadius: 20,
+    backgroundColor: "#E8E8E8",
   },
   rating: {
     fontSize: 14,
@@ -71,21 +83,16 @@ const styles = StyleSheet.create({
     color: "#B1A3D2",
     marginTop: 4,
   },
+  degree: {
+    fontSize: 14,
+    fontWeight: "500",
+    color: "#B1A3D2",
+    marginTop: 2,
+  },
   experience: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: AppColors.white,
-    marginTop: 4,
-  },
-  patients: {
     fontSize: 16,
-    fontWeight: "bold",
+    fontWeight: "600",
     color: AppColors.white,
     marginTop: 4,
-    textDecorationLine: "underline",
-  },
-  patientsText: {
-    fontWeight: "400",
-    letterSpacing: 0.5,
   },
 });
