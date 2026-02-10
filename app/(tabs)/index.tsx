@@ -11,6 +11,7 @@ import Search from "@/components/home/Search";
 import HeadLine from "@/components/home/HeadLine";
 import Category from "@/components/home/Category";
 import DoctorList from "@/components/home/DoctorList";
+import ActionButtons from "@/components/home/ActionButtons";
 import { AppColors } from "@/constants/colors";
 
 export default function HomeScreen() {
@@ -26,6 +27,7 @@ export default function HomeScreen() {
         <HeadLine />
         <Category />
         <DoctorList />
+        <ActionButtons />
       </ScrollView>
     </SafeAreaView>
   );

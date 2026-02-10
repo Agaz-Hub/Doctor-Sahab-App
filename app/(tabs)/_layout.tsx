@@ -38,13 +38,17 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           switch (route.name) {
             case "index":
               return <Foundation name="home" size={24} color={color} />;
-            case "calendar":
+            case "doctors":
+              return <Foundation name="torsos-all" size={24} color={color} />;
+            case "appointments":
               return (
                 <Image
                   source={require("@/assets/images/icon/calendar.png")}
                   style={[styles.icon, { tintColor: color }]}
                 />
               );
+            case "ai-assistant":
+              return <Foundation name="lightbulb" size={24} color={color} />;
             case "messages":
               return (
                 <View>
@@ -83,8 +87,12 @@ function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
           switch (route.name) {
             case "index":
               return "Home";
-            case "calendar":
-              return "Calendar";
+            case "doctors":
+              return "Doctors";
+            case "appointments":
+              return "Appoints";
+            case "ai-assistant":
+              return "Assistant";
             case "messages":
               return "Messages";
             case "notifications":
@@ -126,7 +134,9 @@ export default function TabLayout() {
       }}
     >
       <Tabs.Screen name="index" options={{ title: "Home" }} />
-      <Tabs.Screen name="calendar" options={{ title: "Calendar" }} />
+      <Tabs.Screen name="doctors" options={{ title: "Doctors" }} />
+      <Tabs.Screen name="appointments" options={{ title: "Appointments" }} />
+      <Tabs.Screen name="ai-assistant" options={{ title: "AI Assistant" }} />
       <Tabs.Screen name="messages" options={{ title: "Messages" }} />
       <Tabs.Screen name="notifications" options={{ title: "Alerts" }} />
       <Tabs.Screen name="profile" options={{ title: "Profile" }} />

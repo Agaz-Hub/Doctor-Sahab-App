@@ -47,7 +47,7 @@ export default function DoctorList() {
       const data = await response.json();
 
       if (data.success) {
-        setDoctors(data.doctors.slice(0, 7));
+        setDoctors(data.doctors.slice(0, 5)); // Limit to 5 doctors
       } else {
         setError(data.message || "Failed to fetch doctors");
       }
@@ -65,6 +65,10 @@ export default function DoctorList() {
         id: doctor._id,
       },
     });
+  };
+
+  const handleViewAll = () => {
+    router.push("/(tabs)/doctors");
   };
 
   if (loading) {
@@ -115,7 +119,9 @@ export default function DoctorList() {
           </View>
         </Pressable>
       ))}
-      <View style={styles.bottomSpacing} />
+      <TouchableOpacity style={styles.moreButton} onPress={handleViewAll}>
+        <Text style={styles.moreButtonText}>More Doctors</Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -203,7 +209,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
-  bottomSpacing: {
-    paddingBottom: 100,
+  moreButton: {
+    marginTop: 16,
+    alignSelf: "center",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: AppColors.primaryColor,
+    backgroundColor: AppColors.primaryLight,
+  },
+  moreButtonText: {
+    color: AppColors.primaryColor,
+    fontWeight: "600",
+    fontSize: 14,
   },
 });

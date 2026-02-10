@@ -8,14 +8,55 @@ import {
 } from "react-native";
 import React from "react";
 import { AppColors } from "@/constants/colors";
+import { router } from "expo-router";
+
+const CATEGORIES = [
+  {
+    image: require("@/assets/images/category/1.png"),
+    speciality: "General Physician",
+  },
+  {
+    image: require("@/assets/images/category/2.png"),
+    speciality: "Gynecologist",
+  },
+  {
+    image: require("@/assets/images/category/3.png"),
+    speciality: "Dermatologist",
+  },
+  {
+    image: require("@/assets/images/category/4.png"),
+    speciality: "Pediatricians",
+  },
+  {
+    image: require("@/assets/images/category/5.png"),
+    speciality: "Neurologist",
+  },
+  {
+    image: require("@/assets/images/category/6.png"),
+    speciality: "Gastroenterologist",
+  },
+  {
+    image: require("@/assets/images/category/7.png"),
+    speciality: "Cardiologist",
+  },
+];
 
 interface ButtonProps {
   image: ImageSourcePropType;
+  speciality: string;
 }
 
-const Button: React.FC<ButtonProps> = ({ image }) => {
+const Button: React.FC<ButtonProps> = ({ image, speciality }) => {
   return (
-    <TouchableOpacity style={styles.categoryButton}>
+    <TouchableOpacity
+      style={styles.categoryButton}
+      onPress={() =>
+        router.push({
+          pathname: "/(tabs)/doctors",
+          params: { speciality },
+        })
+      }
+    >
       <Image source={image} style={styles.categoryImage} resizeMode="cover" />
     </TouchableOpacity>
   );
@@ -23,7 +64,15 @@ const Button: React.FC<ButtonProps> = ({ image }) => {
 
 const Button2: React.FC = () => {
   return (
-    <TouchableOpacity style={styles.seeAllButton}>
+    <TouchableOpacity
+      style={styles.seeAllButton}
+      onPress={() =>
+        router.push({
+          pathname: "/(tabs)/doctors",
+          params: { speciality: "All" },
+        })
+      }
+    >
       <Text style={styles.seeAllText}>See all</Text>
     </TouchableOpacity>
   );
@@ -34,15 +83,22 @@ export default function Category() {
     <View style={styles.container}>
       <Text style={styles.title}>Medical Specialist</Text>
       <View style={styles.row}>
-        <Button image={require("@/assets/images/category/1.png")} />
-        <Button image={require("@/assets/images/category/2.png")} />
-        <Button image={require("@/assets/images/category/3.png")} />
-        <Button image={require("@/assets/images/category/4.png")} />
+        {CATEGORIES.slice(0, 4).map((cat) => (
+          <Button
+            key={cat.speciality}
+            image={cat.image}
+            speciality={cat.speciality}
+          />
+        ))}
       </View>
       <View style={styles.row}>
-        <Button image={require("@/assets/images/category/5.png")} />
-        <Button image={require("@/assets/images/category/6.png")} />
-        <Button image={require("@/assets/images/category/7.png")} />
+        {CATEGORIES.slice(4, 7).map((cat) => (
+          <Button
+            key={cat.speciality}
+            image={cat.image}
+            speciality={cat.speciality}
+          />
+        ))}
         <Button2 />
       </View>
     </View>
