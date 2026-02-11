@@ -99,25 +99,33 @@ export default function DoctorsScreen() {
 
     // Apply speciality filter
     if (activeFilter !== "All") {
+      const active = (activeFilter ?? "").toLowerCase();
       result = result.filter(
-        (d: Doctor) =>
-          d.speciality.toLowerCase() === activeFilter.toLowerCase(),
+        (d: Doctor) => (d.speciality ?? "").toLowerCase() === active,
       );
     }
 
     // Apply search query
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      result = result.filter(
-        (d: Doctor) =>
-          d.name.toLowerCase().includes(q) ||
-          d.speciality.toLowerCase().includes(q) ||
-          d.degree.toLowerCase().includes(q) ||
-          d.experience.toLowerCase().includes(q) ||
-          String(d.fees).includes(q) ||
-          (d.address?.line1 && d.address.line1.toLowerCase().includes(q)) ||
-          (d.address?.line2 && d.address.line2.toLowerCase().includes(q)),
-      );
+      result = result.filter((d: Doctor) => {
+        const name = (d.name ?? "").toLowerCase();
+        const speciality = (d.speciality ?? "").toLowerCase();
+        const degree = (d.degree ?? "").toLowerCase();
+        const experience = (d.experience ?? "").toLowerCase();
+        const line1 = (d.address?.line1 ?? "").toLowerCase();
+        const line2 = (d.address?.line2 ?? "").toLowerCase();
+
+        return (
+          name.includes(q) ||
+          speciality.includes(q) ||
+          degree.includes(q) ||
+          experience.includes(q) ||
+          String(d.fees ?? "").includes(q) ||
+          line1.includes(q) ||
+          line2.includes(q)
+        );
+      });
     }
 
     return result;
