@@ -1,3 +1,8 @@
+import Search from "@/components/home/Search";
+import { AppColors } from "@/constants/colors";
+import { Feather, Ionicons } from "@expo/vector-icons";
+import { router, useLocalSearchParams } from "expo-router";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -11,11 +16,6 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import React, { useEffect, useMemo, useState } from "react";
-import { AppColors } from "@/constants/colors";
-import Search from "@/components/home/Search";
-import { Feather, Ionicons } from "@expo/vector-icons";
-import { router, useLocalSearchParams } from "expo-router";
 
 const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
 

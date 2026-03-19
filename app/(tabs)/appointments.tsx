@@ -270,7 +270,7 @@ export default function AppointmentsScreen() {
                   data.message || "Failed to cancel appointment",
                 );
               }
-            } catch (err) {
+            } catch {
               Alert.alert("Error", "Network error. Please try again.");
             }
           },
@@ -495,13 +495,6 @@ export default function AppointmentsScreen() {
       </ScrollView>
     </View>
   );
-}
-
-// Helper to get an ISO date string offset by N days from today
-function getDateString(daysOffset: number): string {
-  const d = new Date();
-  d.setDate(d.getDate() + daysOffset);
-  return d.toISOString().split("T")[0];
 }
 
 const styles = StyleSheet.create({

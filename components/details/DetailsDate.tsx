@@ -1,12 +1,12 @@
+import { AppColors } from "@/constants/colors";
+import React, { useEffect, useState } from "react";
 import {
+  ScrollView,
   StyleSheet,
   Text,
-  View,
   TouchableOpacity,
-  ScrollView,
+  View,
 } from "react-native";
-import React, { useState, useEffect } from "react";
-import { AppColors } from "@/constants/colors";
 
 interface Day {
   day: string;
@@ -21,7 +21,6 @@ interface DetailsDateProps {
   bookedSlots?: Record<string, string[]>;
 }
 
-const TOTAL_SLOTS = 12; // 9AM to 8PM = 12 slots
 const ALL_TIME_SLOTS = [
   "09:00",
   "10:00",

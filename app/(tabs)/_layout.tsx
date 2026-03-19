@@ -1,22 +1,21 @@
-import { Tabs } from "expo-router";
-import React from "react";
-import {
-  View,
-  Text,
-  StyleSheet,
-  Platform,
-  Image,
-  TouchableOpacity,
-} from "react-native";
 import { AppColors } from "@/constants/colors";
 import { Foundation } from "@expo/vector-icons";
 import type { BottomTabBarProps } from "@react-navigation/bottom-tabs";
+import { Tabs } from "expo-router";
+import React from "react";
+import {
+  Image,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
 
-function CustomTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+function CustomTabBar({ state, navigation }: BottomTabBarProps) {
   return (
     <View style={styles.tabBar}>
       {state.routes.map((route, index) => {
-        const { options } = descriptors[route.key];
         const isFocused = state.index === index;
 
         const onPress = () => {
