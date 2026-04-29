@@ -78,7 +78,7 @@ export default function DoctorsScreen() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${BACKEND_URL}/api/doctor/list`);
+      const response = await fetch(`${BACKEND_URL}/api/doctors`);
       const data = await response.json();
 
       if (data.success) {

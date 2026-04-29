@@ -14,8 +14,10 @@ import React, { useState } from "react";
 import { AppColors } from "@/constants/colors";
 import { Ionicons } from "@expo/vector-icons";
 import { useAuth } from "@/context/AuthContext";
+import { useRouter } from "expo-router";
 
 export default function ProfileScreen() {
+  const router = useRouter();
   const {
     token,
     user,
@@ -66,6 +68,32 @@ export default function ProfileScreen() {
       { text: "Cancel", style: "cancel" },
       { text: "Sign Out", style: "destructive", onPress: logout },
     ]);
+  };
+
+  const handleMenuPress = (action: string) => {
+    if (action === "edit") {
+      router.push("/profile/edit");
+      return;
+    }
+
+    if (action === "notifications") {
+      router.push("/notifications-coming-soon");
+      return;
+    }
+
+    if (action === "privacy") {
+      router.push("/info/privacy-security");
+      return;
+    }
+
+    if (action === "support") {
+      router.push("/info/help-support");
+      return;
+    }
+
+    if (action === "about") {
+      router.push("/info/about");
+    }
   };
 
   if (authLoading) {
@@ -212,36 +240,35 @@ export default function ProfileScreen() {
       icon: "person-outline",
       title: "Edit Profile",
       subtitle: "Update your personal information",
+      action: "edit",
     },
     {
       id: 2,
-      icon: "document-text-outline",
-      title: "Medical Records",
-      subtitle: "View your health history",
+      icon: "notifications-outline",
+      title: "Notifications",
+      subtitle: "See latest updates",
+      action: "notifications",
     },
     {
       id: 3,
-      icon: "notifications-outline",
-      title: "Notifications",
-      subtitle: "Manage notification preferences",
-    },
-    {
-      id: 4,
       icon: "shield-checkmark-outline",
       title: "Privacy & Security",
       subtitle: "Control your data and privacy",
+      action: "privacy",
     },
     {
-      id: 5,
+      id: 4,
       icon: "help-circle-outline",
       title: "Help & Support",
       subtitle: "Get help or contact support",
+      action: "support",
     },
     {
-      id: 6,
+      id: 5,
       icon: "information-circle-outline",
       title: "About",
       subtitle: "App version and information",
+      action: "about",
     },
   ];
 
@@ -266,7 +293,11 @@ export default function ProfileScreen() {
       {/* Menu Items */}
       <View style={styles.menuContainer}>
         {menuItems.map((item) => (
-          <TouchableOpacity key={item.id} style={styles.menuItem}>
+          <TouchableOpacity
+            key={item.id}
+            style={styles.menuItem}
+            onPress={() => handleMenuPress(item.action)}
+          >
             <View style={styles.menuIconContainer}>
               <Ionicons
                 name={item.icon as keyof typeof Ionicons.glyphMap}

@@ -13,6 +13,9 @@ import {
   View,
 } from "react-native";
 import { AppColors } from "@/constants/colors";
+import { useAuth } from "@/context/AuthContext";
+import EventSource from "react-native-sse";
+import Markdown from "react-native-markdown-display";
 
 interface Message {
   id: string;
@@ -22,15 +25,20 @@ interface Message {
   sources?: { title: string }[];
 }
 
+const BACKEND_URL = process.env.EXPO_PUBLIC_BACKEND_URL;
+
 export default function AiAssistantScreen() {
   const insets = useSafeAreaInsets();
+  const { token } = useAuth();
   const [messages, setMessages] = useState<Message[]>([]);
   const [inputText, setInputText] = useState("");
   const [loading, setLoading] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
   const flatListRef = useRef<FlatList>(null);
 
   useEffect(() => {
     setMessages([]);
+    setSessionId(null);
   }, []);
 
   const sendMessage = async () => {
@@ -48,50 +56,98 @@ export default function AiAssistantScreen() {
     setLoading(true);
 
     try {
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      
+      if (token) {
+        headers.token = token;
+      }
 
-      const assistantMessage: Message = {
-        id: (Date.now() + 1).toString(),
-        type: "assistant",
-        content: getMockResponse(userMessage.content),
-        timestamp: new Date(),
-        sources: [{ title: "General health guidance" }],
+      const body: Record<string, any> = {
+        message: userMessage.content,
       };
 
-      setMessages((prev) => [...prev, assistantMessage]);
+      if (sessionId) {
+        body.sessionId = sessionId;
+      }
+
+      const es = new EventSource(`${BACKEND_URL}/api/ai/chat`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+      });
+
+      const assistantMessageId = (Date.now() + 1).toString();
+      let currentContent = "";
+
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: assistantMessageId,
+          type: "assistant",
+          content: "",
+          timestamp: new Date(),
+        },
+      ]);
+
       setTimeout(() => {
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 50);
+
+      es.addEventListener("message", (event) => {
+        if (!event.data) return;
+        
+        try {
+          const data = JSON.parse(event.data);
+          
+          if (data.type === "session" && !sessionId) {
+            setSessionId(data.sessionId);
+          } else if (data.type === "chunk") {
+            currentContent += data.text;
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessageId
+                  ? { ...msg, content: currentContent }
+                  : msg
+              )
+            );
+          } else if (data.type === "done") {
+            es.close();
+            setLoading(false);
+          } else if (data.type === "error") {
+            es.close();
+            setLoading(false);
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantMessageId
+                  ? { ...msg, content: msg.content + "\n\n**[Error: Connection interrupted]**" }
+                  : msg
+              )
+            );
+          }
+        } catch (e) {
+          console.error("SSE Parse Error", e);
+        }
+      });
+
+      es.addEventListener("error", (event) => {
+        console.error("SSE Error:", event);
+        es.close();
+        setLoading(false);
+      });
+
     } catch (error) {
       console.error("AI assistant error:", error);
       const errorMessage: Message = {
         id: (Date.now() + 1).toString(),
         type: "assistant",
-        content: "Sorry, something went wrong. Please try again.",
+        content: "Sorry, I am having trouble connecting to the server. Please try again.",
         timestamp: new Date(),
       };
       setMessages((prev) => [...prev, errorMessage]);
-    } finally {
       setLoading(false);
     }
-  };
-
-  const getMockResponse = (query: string) => {
-    const lowerQuery = query.toLowerCase();
-
-    if (lowerQuery.includes("flu") || lowerQuery.includes("cold")) {
-      return "Flu symptoms can include fever, cough, body aches, and fatigue. For a common cold, runny nose and mild cough are typical. Rest, hydrate, and monitor symptoms. If you feel worse or have high fever, consult a doctor.";
-    }
-
-    if (lowerQuery.includes("headache") || lowerQuery.includes("pain")) {
-      return "Headaches can be caused by stress, dehydration, or lack of sleep. Try water, rest, and a calm environment. If headaches are severe or persistent, seek medical advice.";
-    }
-
-    if (lowerQuery.includes("doctor") || lowerQuery.includes("see")) {
-      return "See a doctor if symptoms are severe, do not improve, or include chest pain, breathing difficulty, or high fever. It is always safe to get professional advice.";
-    }
-
-    return "I can help with general health questions. Share symptoms or concerns, and I will provide guidance. For personal medical advice, please consult a healthcare professional.";
   };
 
   const renderMessage = ({ item }: { item: Message }) => (
@@ -107,24 +163,12 @@ export default function AiAssistantScreen() {
           item.type === "user" ? styles.userBubble : styles.assistantBubble,
         ]}
       >
-        <Text
-          style={[
-            styles.messageText,
-            item.type === "user" ? styles.userText : styles.assistantText,
-          ]}
-        >
-          {item.content}
-        </Text>
-
-        {item.sources && item.sources.length > 0 && (
-          <View style={styles.sourcesContainer}>
-            <Text style={styles.sourcesLabel}>Sources:</Text>
-            {item.sources.map((source, index) => (
-              <Text key={index} style={styles.sourceText}>
-                - {source.title}
-              </Text>
-            ))}
-          </View>
+        {item.type === "user" ? (
+          <Text style={styles.userText}>{item.content}</Text>
+        ) : (
+          <Markdown style={markdownStyles}>
+            {item.content || "..."}
+          </Markdown>
         )}
 
         <Text style={styles.timestamp}>
@@ -149,15 +193,15 @@ export default function AiAssistantScreen() {
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.quickActionButton}
-          onPress={() => setInputText("How to prevent common cold?")}
+          onPress={() => setInputText("Show me available general physicians")}
         >
-          <Text style={styles.quickActionText}>Cold Prevention</Text>
+          <Text style={styles.quickActionText}>Find General Physician</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={styles.quickActionButton}
-          onPress={() => setInputText("When should I see a doctor?")}
+          onPress={() => setInputText("I have a headache and need a doctor")}
         >
-          <Text style={styles.quickActionText}>See a Doctor</Text>
+          <Text style={styles.quickActionText}>Headache Analysis</Text>
         </TouchableOpacity>
       </View>
     </View>
@@ -226,6 +270,51 @@ export default function AiAssistantScreen() {
   );
 }
 
+const markdownStyles = StyleSheet.create({
+  body: {
+    color: AppColors.black,
+    fontSize: 15,
+    lineHeight: 22,
+  },
+  paragraph: {
+    marginTop: 0,
+    marginBottom: 10,
+  },
+  heading1: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: AppColors.primaryColor,
+    marginVertical: 8,
+  },
+  heading2: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: AppColors.primaryColor,
+    marginVertical: 6,
+  },
+  heading3: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: AppColors.black,
+    marginVertical: 4,
+  },
+  strong: {
+    fontWeight: 'bold',
+  },
+  em: {
+    fontStyle: 'italic',
+  },
+  list_item: {
+    marginVertical: 2,
+  },
+  bullet_list: {
+    marginBottom: 10,
+  },
+  ordered_list: {
+    marginBottom: 10,
+  },
+});
+
 const styles = StyleSheet.create({
   container: {
     flex: 1,
@@ -290,6 +379,8 @@ const styles = StyleSheet.create({
   },
   userText: {
     color: AppColors.white,
+    fontSize: 15,
+    lineHeight: 20,
   },
   assistantText: {
     color: AppColors.black,
@@ -298,22 +389,6 @@ const styles = StyleSheet.create({
     fontSize: 11,
     color: AppColors.gray,
     marginTop: 4,
-  },
-  sourcesContainer: {
-    marginTop: 8,
-    paddingTop: 8,
-    borderTopWidth: 1,
-    borderTopColor: AppColors.primaryLighter,
-  },
-  sourcesLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: AppColors.gray,
-    marginBottom: 4,
-  },
-  sourceText: {
-    fontSize: 11,
-    color: AppColors.gray,
   },
   quickActionsContainer: {
     padding: 16,

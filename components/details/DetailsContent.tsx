@@ -9,23 +9,38 @@ interface DetailsContentProps {
   about?: string;
   fees?: number;
   available?: boolean;
-  slotsBooked?: Record<string, string[]>;
   address?: {
     line1?: string;
     line2?: string;
   };
   onDateSelect?: (date: string) => void;
-  onTimeSelect?: (time: string) => void;
+  onTimeSelect?: (shiftId: string) => void;
+  shifts?: Array<{
+    id: string;
+    label: string;
+    startTime: string;
+    endTime: string;
+  }>;
+  shiftAvailability?: Record<
+    string,
+    { isFull?: boolean; remainingMinutes?: number }
+  >;
+  dateShiftAvailability?: Record<
+    string,
+    Record<string, { isFull?: boolean; remainingMinutes?: number }>
+  >;
 }
 
 export default function DetailsContent({
   about,
   fees,
   available,
-  slotsBooked = {},
   address,
   onDateSelect,
   onTimeSelect,
+  shifts = [],
+  shiftAvailability = {},
+  dateShiftAvailability = {},
 }: DetailsContentProps) {
   const [showFullText, setShowFullText] = useState(false);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
@@ -45,10 +60,6 @@ export default function DetailsContent({
   const handleTimeSelect = (time: string) => {
     onTimeSelect?.(time);
   };
-
-  const bookedTimesForDate = selectedDate
-    ? slotsBooked[selectedDate] || []
-    : [];
 
   const addressText =
     address?.line1 || address?.line2
@@ -100,14 +111,16 @@ export default function DetailsContent({
       <View style={styles.dateContainer}>
         <DetailsDate
           onDateSelect={handleDateSelect}
-          bookedSlots={slotsBooked}
+          shifts={shifts}
+          dateShiftAvailability={dateShiftAvailability}
         />
       </View>
       <View style={styles.timeContainer}>
         <DetailsTime
           onTimeSelect={handleTimeSelect}
-          bookedTimes={bookedTimesForDate}
-          selectedDate={selectedDate || undefined}
+          shifts={shifts}
+          shiftAvailability={shiftAvailability}
+          selectedDate={selectedDate}
         />
       </View>
     </View>

@@ -2,7 +2,7 @@ import { AppColors } from "@/constants/colors";
 import { useAuth } from "@/context/AuthContext";
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -25,6 +25,10 @@ interface Appointment {
   };
   slotDate: string;
   slotTime: string;
+  date?: number;
+  shiftLabel?: string;
+  durationMinutes?: number;
+  severityScore?: number;
   cancelled: boolean;
   iscompleted: boolean;
   payment: boolean;
@@ -40,134 +44,185 @@ export default function AppointmentsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [filter, setFilter] = useState<"all" | "upcoming" | "past">("upcoming");
 
+  const loadAppointments = useCallback(
+    async (silent = false) => {
+      if (!token) {
+        setLoading(false);
+        return;
+      }
+      try {
+        if (!silent) setLoading(true);
+        const response = await fetch(
+          `${BACKEND_URL}/api/users/me/appointments`,
+          {
+            headers: { token },
+          },
+        );
+        const data = await response.json();
+        if (data.success) {
+          const loaded: Appointment[] = Array.isArray(data.appointments)
+            ? data.appointments
+            : [];
+
+          setAppointments(loaded);
+        } else {
+          Alert.alert("Error", data.message || "Failed to load appointments");
+        }
+      } catch (error) {
+        console.error("Error loading appointments:", error);
+        Alert.alert("Error", "Failed to load appointments");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [token],
+  );
+
   useEffect(() => {
     loadAppointments();
-  }, []);
-
-  const loadAppointments = async () => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-    try {
-      setLoading(true);
-      const response = await fetch(`${BACKEND_URL}/api/user/appointments`, {
-        headers: { token },
-      });
-      const data = await response.json();
-      if (data.success) {
-        const loaded: Appointment[] = data.appointments;
-        const now = new Date();
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const missedIds: string[] = [];
-
-        // Auto-cancel past scheduled (unpaid/uncompleted) appointments
-        loaded.forEach((apt) => {
-          if (apt.cancelled || apt.iscompleted || apt.payment) return;
-          const [day, month, year] = apt.slotDate.split("_").map(Number);
-          const aptDate = new Date(year, month - 1, day);
-          aptDate.setHours(0, 0, 0, 0);
-
-          // Cancel if the appointment date is before today (past section)
-          if (aptDate < today) {
-            missedIds.push(apt._id);
-            return;
-          }
-
-          // Also cancel same-day appointments whose time has already passed
-          const [hours, minutes] = apt.slotTime.split(":").map(Number);
-          const aptDateTime = new Date(year, month - 1, day, hours, minutes);
-          if (aptDateTime < now) {
-            missedIds.push(apt._id);
-          }
-        });
-
-        // Mark missed ones as cancelled locally
-        const processed = loaded.map((apt) =>
-          missedIds.includes(apt._id) ? { ...apt, cancelled: true } : apt,
-        );
-        setAppointments(processed);
-
-        // Fire cancel API for missed appointments in background
-        missedIds.forEach((id) => {
-          fetch(`${BACKEND_URL}/api/user/cancel-appointment`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", token: token! },
-            body: JSON.stringify({ appointmentId: id }),
-          }).catch(() => {});
-        });
-      } else {
-        Alert.alert("Error", data.message || "Failed to load appointments");
-      }
-    } catch (error) {
-      console.error("Error loading appointments:", error);
-      Alert.alert("Error", "Failed to load appointments");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
-  };
+  }, [loadAppointments]);
 
   const onRefresh = () => {
     setRefreshing(true);
     loadAppointments();
   };
 
+  useEffect(() => {
+    if (!token) return;
+    const interval = setInterval(() => {
+      loadAppointments(true);
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [token, loadAppointments]);
+
   // Parse slotDate format "day_month_year" (e.g. "11_2_2026") into a Date
-  const parseSlotDate = (slotDate: string): Date => {
-    const parts = slotDate.split("_");
-    const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1; // months are 0-indexed
-    const year = parseInt(parts[2], 10);
-    return new Date(year, month, day);
+  const parseSlotDate = (slotDate: string): Date | null => {
+    if (!slotDate || typeof slotDate !== "string") return null;
+
+    const trimmed = slotDate.trim();
+
+    if (/^\d{1,2}_\d{1,2}_\d{4}$/.test(trimmed)) {
+      const [day, month, year] = trimmed.split("_").map(Number);
+      return new Date(year, month - 1, day);
+    }
+
+    if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(trimmed)) {
+      const [year, month, day] = trimmed.split("-").map(Number);
+      return new Date(year, month - 1, day);
+    }
+
+    if (
+      /^\d{1,2}-\d{1,2}-\d{4}$/.test(trimmed) ||
+      /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(trimmed)
+    ) {
+      const [day, month, year] = trimmed.split(/[-/]/).map(Number);
+      return new Date(year, month - 1, day);
+    }
+
+    const parsed = new Date(trimmed);
+    if (Number.isNaN(parsed.getTime())) return null;
+    return new Date(parsed.getFullYear(), parsed.getMonth(), parsed.getDate());
+  };
+
+  const parseSlotTime = (
+    slotTime: string,
+  ): { hours: number; minutes: number } => {
+    if (!slotTime || typeof slotTime !== "string")
+      return { hours: 0, minutes: 0 };
+
+    const trimmed = slotTime.trim();
+    const amPmMatch = trimmed.match(/^(\d{1,2}):(\d{2})\s*(AM|PM)$/i);
+    if (amPmMatch) {
+      let hours = Number(amPmMatch[1]);
+      const minutes = Number(amPmMatch[2]);
+      const meridiem = amPmMatch[3].toUpperCase();
+      if (meridiem === "PM" && hours !== 12) hours += 12;
+      if (meridiem === "AM" && hours === 12) hours = 0;
+      return { hours, minutes };
+    }
+
+    const hhmmMatch = trimmed.match(/^(\d{1,2}):(\d{2})$/);
+    if (hhmmMatch) {
+      return { hours: Number(hhmmMatch[1]), minutes: Number(hhmmMatch[2]) };
+    }
+
+    return { hours: 0, minutes: 0 };
+  };
+
+  const getDurationMinutes = (apt: Appointment): number => {
+    const parsed = Number(apt.durationMinutes);
+    return Number.isFinite(parsed) && parsed > 0 ? parsed : 30;
   };
 
   // Parse slotDate + slotTime into a precise Date
-  const parseSlotDateTime = (slotDate: string, slotTime: string): Date => {
-    const parts = slotDate.split("_");
-    const day = parseInt(parts[0], 10);
-    const month = parseInt(parts[1], 10) - 1;
-    const year = parseInt(parts[2], 10);
-    const [hours, minutes] = slotTime.split(":").map(Number);
-    return new Date(year, month, day, hours, minutes);
+  const parseSlotDateTime = (
+    slotDate: string,
+    slotTime: string,
+  ): Date | null => {
+    const date = parseSlotDate(slotDate);
+    if (!date) return null;
+    const { hours, minutes } = parseSlotTime(slotTime);
+    return new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate(),
+      hours,
+      minutes,
+      0,
+      0,
+    );
+  };
+
+  const getAppointmentWindow = (apt: Appointment) => {
+    const start = parseSlotDateTime(apt.slotDate, apt.slotTime);
+    if (!start) return { start: null as Date | null, end: null as Date | null };
+    const end = new Date(start.getTime() + getDurationMinutes(apt) * 60000);
+    return { start, end };
   };
 
   const getFilteredAppointments = () => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    const now = new Date();
+
+    const sortNewestFirst = (a: Appointment, b: Appointment) => {
+      const aOrderTime =
+        a.date || parseSlotDateTime(a.slotDate, a.slotTime)?.getTime() || 0;
+      const bOrderTime =
+        b.date || parseSlotDateTime(b.slotDate, b.slotTime)?.getTime() || 0;
+      return bOrderTime - aOrderTime;
+    };
 
     if (filter === "upcoming") {
-      return appointments.filter(
-        (apt: Appointment) =>
-          parseSlotDate(apt.slotDate) >= today &&
-          !apt.cancelled &&
-          !apt.iscompleted,
-      );
+      return appointments
+        .filter((apt: Appointment) => {
+          if (apt.cancelled || apt.iscompleted) return false;
+          const { end } = getAppointmentWindow(apt);
+          if (!end) return false;
+          return end >= now;
+        })
+        .sort(sortNewestFirst);
     } else if (filter === "past") {
       return appointments
-        .filter(
-          (apt: Appointment) =>
-            parseSlotDate(apt.slotDate) < today ||
-            apt.iscompleted ||
-            apt.cancelled,
-        )
-        .sort(
-          (a, b) =>
-            parseSlotDate(b.slotDate).getTime() -
-            parseSlotDate(a.slotDate).getTime(),
-        );
+        .filter((apt: Appointment) => {
+          if (apt.iscompleted || apt.cancelled) return true;
+          const { end } = getAppointmentWindow(apt);
+          return Boolean(end && end < now);
+        })
+        .sort(sortNewestFirst);
     }
-    return appointments;
+    return [...appointments].sort(sortNewestFirst);
   };
 
   const getStatus = (apt: Appointment) => {
     if (apt.cancelled) return "cancelled";
     if (apt.iscompleted) return "completed";
-    // If date+time has passed and not paid → missed/cancelled
     const now = new Date();
-    const aptDateTime = parseSlotDateTime(apt.slotDate, apt.slotTime);
-    if (aptDateTime < now && !apt.payment) return "cancelled";
+    const { start, end } = getAppointmentWindow(apt);
+
+    if (!start || !end) return "scheduled";
+    if (now > end) return "cancelled";
+    if (now >= start && now <= end) return "live";
     if (apt.payment) return "confirmed";
     return "scheduled";
   };
@@ -178,6 +233,8 @@ export default function AppointmentsScreen() {
         return AppColors.primaryColor;
       case "confirmed":
         return "#22C55E";
+      case "live":
+        return "#2563EB";
       case "completed":
         return AppColors.gray;
       case "cancelled":
@@ -193,6 +250,8 @@ export default function AppointmentsScreen() {
         return "time";
       case "confirmed":
         return "checkmark-circle";
+      case "live":
+        return "play-circle";
       case "completed":
         return "checkmark-done-circle";
       case "cancelled":
@@ -204,6 +263,7 @@ export default function AppointmentsScreen() {
 
   const formatDate = (dateString: string) => {
     const date = parseSlotDate(dateString);
+    if (!date) return "Date unavailable";
     return date.toLocaleDateString("en-US", {
       weekday: "short",
       month: "short",
@@ -245,9 +305,9 @@ export default function AppointmentsScreen() {
             if (!token) return;
             try {
               const response = await fetch(
-                `${BACKEND_URL}/api/user/cancel-appointment`,
+                `${BACKEND_URL}/api/users/me/appointments/${appointmentId}/cancel`,
                 {
-                  method: "POST",
+                  method: "PATCH",
                   headers: {
                     "Content-Type": "application/json",
                     token,
@@ -282,6 +342,12 @@ export default function AppointmentsScreen() {
   const renderAppointment = (appointment: Appointment) => {
     const status = getStatus(appointment);
     const statusColor = getStatusColor(status);
+    const now = new Date();
+    const { start, end } = getAppointmentWindow(appointment);
+    const canCancel =
+      !appointment.cancelled &&
+      !appointment.iscompleted &&
+      Boolean(end && now <= end);
 
     return (
       <View key={appointment._id} style={styles.appointmentCard}>
@@ -325,6 +391,43 @@ export default function AppointmentsScreen() {
           <View style={styles.detailRow}>
             <Ionicons name="time-outline" size={16} color={AppColors.gray} />
             <Text style={styles.detailText}>{appointment.slotTime}</Text>
+          </View>
+          {start && end ? (
+            <View style={styles.detailRow}>
+              <Ionicons name="timer-outline" size={16} color={AppColors.gray} />
+              <Text style={styles.detailText}>
+                Window:{" "}
+                {start.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}{" "}
+                -{" "}
+                {end.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </Text>
+            </View>
+          ) : null}
+          {appointment.shiftLabel ? (
+            <View style={styles.detailRow}>
+              <Ionicons
+                name="layers-outline"
+                size={16}
+                color={AppColors.gray}
+              />
+              <Text style={styles.detailText}>{appointment.shiftLabel}</Text>
+            </View>
+          ) : null}
+          <View style={styles.detailRow}>
+            <Ionicons
+              name="hourglass-outline"
+              size={16}
+              color={AppColors.gray}
+            />
+            <Text style={styles.detailText}>
+              {appointment.durationMinutes || 20} mins consultation
+            </Text>
           </View>
           <View style={styles.detailRow}>
             <Ionicons name="cash-outline" size={16} color={AppColors.gray} />
@@ -385,8 +488,9 @@ export default function AppointmentsScreen() {
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={styles.cancelButton}
+              style={[styles.cancelButton, { opacity: canCancel ? 1 : 0.45 }]}
               onPress={() => handleCancel(appointment._id)}
+              disabled={!canCancel}
             >
               <Ionicons name="close-circle-outline" size={16} color="#EF4444" />
               <Text style={styles.cancelText}>Cancel</Text>

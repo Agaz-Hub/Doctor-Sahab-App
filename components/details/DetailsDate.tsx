@@ -18,52 +18,93 @@ interface Day {
 
 interface DetailsDateProps {
   onDateSelect?: (date: string) => void;
-  bookedSlots?: Record<string, string[]>;
+  shifts?: Array<{
+    id: string;
+    label: string;
+    startTime: string;
+    endTime: string;
+  }>;
+  dateShiftAvailability?: Record<
+    string,
+    Record<string, { isFull?: boolean; remainingMinutes?: number }>
+  >;
 }
 
-const ALL_TIME_SLOTS = [
-  "09:00",
-  "10:00",
-  "11:00",
-  "12:00",
-  "13:00",
-  "14:00",
-  "15:00",
-  "16:00",
-  "17:00",
-  "18:00",
-  "19:00",
-  "20:00",
-];
-
-// Helper to check if a date is today
-const isDateToday = (fullDate: string): boolean => {
-  const today = new Date();
-  const todayFormatted = `${today.getDate()}_${today.getMonth() + 1}_${today.getFullYear()}`;
-  return fullDate === todayFormatted;
+const parseDateKey = (fullDate: string): Date | null => {
+  const [day, month, year] = fullDate.split("_").map(Number);
+  if (!day || !month || !year) return null;
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-// Get available slots count for a date (accounting for past hours if today)
-const getAvailableSlotsCount = (
-  fullDate: string,
-  bookedSlots: string[],
-): number => {
-  let availableSlots = ALL_TIME_SLOTS;
+const isPastDate = (fullDate: string): boolean => {
+  const date = parseDateKey(fullDate);
+  if (!date) return true;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  date.setHours(0, 0, 0, 0);
+  return date < today;
+};
 
-  // If today, filter out past time slots
-  if (isDateToday(fullDate)) {
-    const currentHour = new Date().getHours();
-    availableSlots = ALL_TIME_SLOTS.filter((slot) => {
-      const [hours] = slot.split(":").map(Number);
-      return hours > currentHour;
-    });
+const isTodayDate = (fullDate: string): boolean => {
+  const date = parseDateKey(fullDate);
+  if (!date) return false;
+  const now = new Date();
+  return (
+    date.getFullYear() === now.getFullYear() &&
+    date.getMonth() === now.getMonth() &&
+    date.getDate() === now.getDate()
+  );
+};
+
+const parseHHMMToMinutes = (time: string): number | null => {
+  if (!time || !time.includes(":")) return null;
+  const [h, m] = time.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+};
+
+const getLocalAvailableShiftCount = (
+  fullDate: string,
+  shifts: Array<{ startTime: string; endTime: string }>,
+): number => {
+  if (isPastDate(fullDate)) return 0;
+
+  if (!isTodayDate(fullDate)) {
+    return shifts.length;
   }
 
-  // Subtract booked slots
-  const availableCount = availableSlots.filter(
-    (slot) => !bookedSlots.includes(slot),
-  ).length;
-  return availableCount;
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+
+  return shifts.filter((shift) => {
+    const startMinutes = parseHHMMToMinutes(shift.startTime);
+    const endMinutes = parseHHMMToMinutes(shift.endTime);
+    if (
+      startMinutes === null ||
+      endMinutes === null ||
+      startMinutes >= endMinutes
+    ) {
+      return false;
+    }
+    return endMinutes > nowMinutes;
+  }).length;
+};
+
+const getAvailableShiftCountForDate = (
+  fullDate: string,
+  shifts: Array<{ id: string; startTime: string; endTime: string }>,
+  dateShiftAvailability: Record<
+    string,
+    Record<string, { isFull?: boolean; remainingMinutes?: number }>
+  >,
+): number => {
+  const shiftMap = dateShiftAvailability[fullDate] || {};
+  if (Object.keys(shiftMap).length > 0) {
+    return shifts.filter((shift) => shiftMap[shift.id]?.isFull !== true).length;
+  }
+
+  return getLocalAvailableShiftCount(fullDate, shifts);
 };
 
 interface WeekButtonProps {
@@ -148,7 +189,8 @@ const WeekButton: React.FC<WeekButtonProps> = ({
 
 export default function DetailsDate({
   onDateSelect,
-  bookedSlots = {},
+  shifts = [],
+  dateShiftAvailability = {},
 }: DetailsDateProps) {
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
   const [days, setDays] = useState<Day[]>([]);
@@ -173,6 +215,36 @@ export default function DetailsDate({
   useEffect(() => {
     generateDays();
   }, []);
+
+  useEffect(() => {
+    if (days.length === 0) return;
+
+    const selectedStillAvailable =
+      selectedDate &&
+      getAvailableShiftCountForDate(
+        selectedDate,
+        shifts,
+        dateShiftAvailability,
+      ) > 0;
+
+    if (selectedStillAvailable) {
+      return;
+    }
+
+    const firstAvailableDay = days.find(
+      (item) =>
+        getAvailableShiftCountForDate(
+          item.fullDate,
+          shifts,
+          dateShiftAvailability,
+        ) > 0,
+    );
+
+    if (firstAvailableDay) {
+      setSelectedDate(firstAvailableDay.fullDate);
+      onDateSelect?.(firstAvailableDay.fullDate);
+    }
+  }, [days, selectedDate, shifts, dateShiftAvailability, onDateSelect]);
 
   const generateDays = () => {
     const today = new Date();
@@ -202,11 +274,7 @@ export default function DetailsDate({
     setDays(generatedDays);
     setCurrentMonth(`${monthNames[today.getMonth()]} ${today.getFullYear()}`);
 
-    // Auto-select first date
-    if (generatedDays.length > 0) {
-      setSelectedDate(generatedDays[0].fullDate);
-      onDateSelect?.(generatedDays[0].fullDate);
-    }
+    // Keep selection in sync from date/availability effect.
   };
 
   const handlePress = (fullDate: string) => {
@@ -224,10 +292,10 @@ export default function DetailsDate({
       <View style={styles.daysContainer}>
         <ScrollView showsHorizontalScrollIndicator={false} horizontal>
           {days.map((item, index) => {
-            const bookedForDate = bookedSlots[item.fullDate] || [];
-            const availableCount = getAvailableSlotsCount(
+            const availableCount = getAvailableShiftCountForDate(
               item.fullDate,
-              bookedForDate,
+              shifts,
+              dateShiftAvailability,
             );
             const isFullyBooked = availableCount === 0;
             return (

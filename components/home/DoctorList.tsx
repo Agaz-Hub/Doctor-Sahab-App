@@ -43,7 +43,7 @@ export default function DoctorList() {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch(`${BACKEND_URL}/api/doctor/list`);
+      const response = await fetch(`${BACKEND_URL}/api/doctors`);
       const data = await response.json();
 
       if (data.success) {

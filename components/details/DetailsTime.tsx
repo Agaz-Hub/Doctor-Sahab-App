@@ -9,18 +9,40 @@ import React, { useState, useEffect } from "react";
 import { AppColors } from "@/constants/colors";
 
 interface TimeSlot {
+  id: string;
   label: string;
-  value: string;
+  startTime: string;
+  endTime: string;
 }
 
 interface DetailsTimeProps {
-  onTimeSelect?: (time: string) => void;
-  bookedTimes?: string[];
-  selectedDate?: string;
+  onTimeSelect?: (shiftId: string) => void;
+  shifts?: TimeSlot[];
+  selectedDate?: string | null;
+  shiftAvailability?: Record<
+    string,
+    { isFull?: boolean; remainingMinutes?: number }
+  >;
 }
+
+const parseDateKey = (dateKey: string | null | undefined): Date | null => {
+  if (!dateKey) return null;
+  const [day, month, year] = dateKey.split("_").map(Number);
+  if (!day || !month || !year) return null;
+  const parsed = new Date(year, month - 1, day);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+};
+
+const parseHHMMToMinutes = (time: string): number | null => {
+  if (!time || !time.includes(":")) return null;
+  const [h, m] = time.split(":").map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+  return h * 60 + m;
+};
 
 interface TimeButtonProps {
   label: string;
+  subtitle: string;
   onPress: () => void;
   isSelected: boolean;
   isBooked: boolean;
@@ -29,6 +51,7 @@ interface TimeButtonProps {
 
 const TimeButton: React.FC<TimeButtonProps> = ({
   label,
+  subtitle,
   onPress,
   isSelected,
   isBooked,
@@ -64,91 +87,96 @@ const TimeButton: React.FC<TimeButtonProps> = ({
     >
       {label}
     </Text>
-    {isBooked && <Text style={styles.bookedText}>Booked</Text>}
+    <Text style={styles.subtitleText}>{subtitle}</Text>
+    {isBooked && <Text style={styles.bookedText}>Full</Text>}
   </TouchableOpacity>
 );
 
 export default function DetailsTime({
   onTimeSelect,
-  bookedTimes = [],
+  shifts = [],
   selectedDate,
+  shiftAvailability = {},
 }: DetailsTimeProps) {
   const [selectedTime, setSelectedTime] = useState<string | null>(null);
 
-  // Reset selection when date changes
   useEffect(() => {
     setSelectedTime(null);
-  }, [selectedDate]);
-
-  // Generate time slots from 9 AM to 8 PM
-  const allTimes: TimeSlot[] = [
-    { label: "09:00 AM", value: "09:00" },
-    { label: "10:00 AM", value: "10:00" },
-    { label: "11:00 AM", value: "11:00" },
-    { label: "12:00 PM", value: "12:00" },
-    { label: "01:00 PM", value: "13:00" },
-    { label: "02:00 PM", value: "14:00" },
-    { label: "03:00 PM", value: "15:00" },
-    { label: "04:00 PM", value: "16:00" },
-    { label: "05:00 PM", value: "17:00" },
-    { label: "06:00 PM", value: "18:00" },
-    { label: "07:00 PM", value: "19:00" },
-    { label: "08:00 PM", value: "20:00" },
-  ];
-
-  // Check if selected date is today to filter past times
-  const isToday = () => {
-    if (!selectedDate) return false;
-    const today = new Date();
-    const todayFormatted = `${today.getDate()}_${today.getMonth() + 1}_${today.getFullYear()}`;
-    return selectedDate === todayFormatted;
-  };
-
-  // Filter times - remove past slots if today
-  const times = allTimes.filter((slot) => {
-    if (!isToday()) return true;
-    const now = new Date();
-    const [hours] = slot.value.split(":").map(Number);
-    return hours > now.getHours();
-  });
+  }, [selectedDate, JSON.stringify(shifts)]);
 
   const handleTimePress = (time: string) => {
     setSelectedTime(time);
     onTimeSelect?.(time);
   };
 
-  const isTimeBooked = (time: string) => {
-    return bookedTimes.includes(time);
+  const isTimeBooked = (shiftId: string) => {
+    return shiftAvailability[shiftId]?.isFull === true;
   };
 
-  const availableCount = times.filter((t) => !isTimeBooked(t.value)).length;
+  const isPastDate = (dateKey: string | null | undefined): boolean => {
+    const date = parseDateKey(dateKey);
+    if (!date) return false;
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    date.setHours(0, 0, 0, 0);
+    return date < today;
+  };
+
+  const isSelectedDateToday = (dateKey: string | null | undefined): boolean => {
+    const date = parseDateKey(dateKey);
+    if (!date) return false;
+    const now = new Date();
+    return (
+      date.getFullYear() === now.getFullYear() &&
+      date.getMonth() === now.getMonth() &&
+      date.getDate() === now.getDate()
+    );
+  };
+
+  const isPastShiftWindow = (shift: TimeSlot): boolean => {
+    if (!isSelectedDateToday(selectedDate)) return false;
+    const endMinutes = parseHHMMToMinutes(shift.endTime);
+    if (endMinutes === null) return false;
+    const now = new Date();
+    const nowMinutes = now.getHours() * 60 + now.getMinutes();
+    return endMinutes <= nowMinutes;
+  };
+
+  const isShiftDisabled = (shift: TimeSlot): boolean => {
+    if (isPastDate(selectedDate)) return true;
+    if (isPastShiftWindow(shift)) return true;
+    return isTimeBooked(shift.id);
+  };
+
+  const availableCount = shifts.filter(
+    (shift) => !isShiftDisabled(shift),
+  ).length;
 
   return (
     <View>
       <View style={styles.header}>
-        <Text style={styles.title}>Select Time</Text>
+        <Text style={styles.title}>Select Shift</Text>
         <Text style={styles.availableText}>
-          {availableCount} slots available
+          {availableCount} shifts available
         </Text>
       </View>
       <View style={styles.container}>
-        {times.length > 0 ? (
+        {shifts.length > 0 ? (
           <ScrollView showsHorizontalScrollIndicator={false} horizontal>
-            {times.map(({ label, value }, index) => (
+            {shifts.map((shift, index) => (
               <TimeButton
-                key={value}
-                label={label}
+                key={shift.id}
+                label={shift.label}
+                subtitle={`${shift.startTime} - ${shift.endTime}`}
                 index={index}
-                isSelected={selectedTime === value}
-                isBooked={isTimeBooked(value)}
-                onPress={() => handleTimePress(value)}
+                isSelected={selectedTime === shift.id}
+                isBooked={isShiftDisabled(shift)}
+                onPress={() => handleTimePress(shift.id)}
               />
             ))}
           </ScrollView>
         ) : (
-          <Text style={styles.noSlotsText}>
-            {isToday() ? "No more slots available today" : "No slots available"}
-          </Text>
+          <Text style={styles.noSlotsText}>No shifts available</Text>
         )}
       </View>
     </View>
@@ -189,6 +217,11 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: "#999",
     marginTop: 2,
+  },
+  subtitleText: {
+    fontSize: 11,
+    color: "#666",
+    marginTop: 3,
   },
   noSlotsText: {
     textAlign: "center",
