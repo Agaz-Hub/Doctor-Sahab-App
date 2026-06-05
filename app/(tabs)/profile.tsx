@@ -1,3 +1,9 @@
+import { AppColors } from "@/constants/colors";
+import { useAuth } from "@/context/AuthContext";
+import { Ionicons } from "@expo/vector-icons";
+import { Asset } from "expo-asset";
+import { useRouter } from "expo-router";
+import React, { useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -10,11 +16,9 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import React, { useState } from "react";
-import { AppColors } from "@/constants/colors";
-import { Ionicons } from "@expo/vector-icons";
-import { useAuth } from "@/context/AuthContext";
-import { useRouter } from "expo-router";
+import { SvgUri } from "react-native-svg";
+
+const logoUri = Asset.fromModule(require("../../assets/images/logo.svg")).uri;
 
 export default function ProfileScreen() {
   const router = useRouter();
@@ -118,7 +122,7 @@ export default function ProfileScreen() {
         >
           <View style={styles.authHeader}>
             <View style={styles.authLogo}>
-              <Ionicons name="medkit" size={36} color={AppColors.white} />
+              <SvgUri uri={logoUri} width={44} height={44} />
             </View>
             <Text style={styles.authTitle}>
               {isLogin ? "Welcome Back" : "Create Account"}
@@ -357,7 +361,7 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: AppColors.primaryColor,
+    backgroundColor: AppColors.primaryLight,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 20,

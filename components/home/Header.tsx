@@ -1,16 +1,17 @@
-import { Image, StyleSheet, Text, View } from "react-native";
-import React from "react";
-import { MaterialIcons } from "@expo/vector-icons";
 import { AppColors } from "@/constants/colors";
+import { MaterialIcons } from "@expo/vector-icons";
+import { Asset } from "expo-asset";
+import React from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { SvgUri } from "react-native-svg";
+
+const logoUri = Asset.fromModule(require("../../assets/images/logo.svg")).uri;
 
 export default function Header() {
   return (
     <View style={styles.container}>
-      <View>
-        <Image
-          source={require("@/assets/images/icon/menu.png")}
-          style={styles.menuIcon}
-        />
+      <View style={styles.leftSlot}>
+        <SvgUri uri={logoUri} width={140} height={30} />
       </View>
       <View style={styles.locationContainer}>
         <MaterialIcons
@@ -30,9 +31,8 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
   },
-  menuIcon: {
-    width: 30,
-    height: 30,
+  leftSlot: {
+    flex: 1,
   },
   locationContainer: {
     flexDirection: "row",
